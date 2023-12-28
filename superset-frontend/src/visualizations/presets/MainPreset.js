@@ -81,6 +81,12 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import FilterBoxChartPlugin from '../FilterBox/FilterBoxChartPlugin';
 import TimeTableChartPlugin from '../TimeTable';
+// TODO: SWIGGY
+import { GroupBigNumberChartPlugin } from './GroupBigNumber';
+import { CustomGaugeChartPlugin } from './CustomGaugeChart';
+import { HalfDonutChartPlugin } from './HalfDonut';
+import { ConditionalBigNumberTotalChartPlugin } from './ConditionalBigNumberTotal';
+// TODO: SWIGGY - END
 
 export default class MainPreset extends Preset {
   constructor() {
@@ -166,6 +172,14 @@ export default class MainPreset extends Preset {
         new TimeGrainFilterPlugin().configure({ key: 'filter_timegrain' }),
         new EchartsTreeChartPlugin().configure({ key: 'tree_chart' }),
         new HandlebarsChartPlugin().configure({ key: 'handlebars' }),
+        // TODO: SWIGGY
+        new GroupBigNumberChartPlugin().configure({ key: 'group_big_number' }),
+        new HalfDonutChartPlugin().configure({ key: 'half_donut' }),
+        new ConditionalBigNumberTotalChartPlugin().configure({
+          key: 'conditional_big_number_total',
+        }),
+        new CustomGaugeChartPlugin().configure({ key: 'custom_gauge' }),
+        // TODO: SWIGGY - END
         ...experimentalplugins,
       ],
     });

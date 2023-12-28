@@ -201,7 +201,9 @@
     "urijs": "^1.19.8",
     "use-immer": "^0.6.0",
     "use-query-params": "^1.1.9",
-    "yargs": "^15.4.1"
+    "yargs": "^15.4.1",
+    "@ant-design/plots": "^1.0.0-beta.10",
+    "echarts": "^5.3.3"
   },
   "devDependencies": {
     "@applitools/eyes-storybook": "^3.27.6",

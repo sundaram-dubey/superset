@@ -36,6 +36,9 @@ RUN mkdir /app \
 COPY ./requirements/*.txt  /app/requirements/
 COPY setup.py MANIFEST.in README.md /app/
 COPY superset-frontend/package.json /app/superset-frontend/
+# TODO: SWIGGY
+COPY superset-frontend/.npmrc /app/superset-frontend/.npmrc
+# TODO: SWIGGY END
 RUN cd /app \
     && mkdir -p superset/static \
     && touch superset/static/version_info.json \
@@ -58,6 +61,10 @@ RUN mkdir -p /app/superset-frontend
 RUN mkdir -p /app/superset/assets
 COPY ./docker/frontend-mem-nag.sh /
 COPY ./superset-frontend /app/superset-frontend
+# TODO: SWIGGY
+COPY ./superset-frontend/package* /app/superset-frontend/
+COPY ./superset-frontend/.npmrc /app/superset-frontend/.npmrc
+# TODO: SWIGGY END
 RUN /frontend-mem-nag.sh \
         && cd /app/superset-frontend \
         && npm ci
@@ -92,6 +99,14 @@ RUN mkdir -p ${PYTHONPATH} \
             libpq-dev \
             libecpg-dev \
         && rm -rf /var/lib/apt/lists/*
+
+# TODO: SWIGGY
+RUN wget https://databricks-bi-artifacts.s3.us-east-2.amazonaws.com/simbaspark-drivers/odbc/2.6.24/SimbaSparkODBC-2.6.24.1041-Debian-64bit.zip
+RUN unzip SimbaSparkODBC-2.6.24.1041-Debian-64bit.zip
+RUN dpkg -i simbaspark_2.6.24.1041-2_amd64.deb
+
+COPY --chown=superset ./docker/pythonpath_dev/superset_config.py /app/pythonpath/
+# TODO: SWIGGY END
 
 COPY --from=superset-py /usr/local/lib/python3.8/site-packages/ /usr/local/lib/python3.8/site-packages/
 # Copying site-packages doesn't move the CLIs, so let's copy them one by one
