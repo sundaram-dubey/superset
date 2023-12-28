@@ -40,6 +40,10 @@ from superset.stats_logger import BaseStatsLogger
 from superset.superset_typing import FlaskResponse
 from superset.utils.core import time_function
 from superset.views.base import handle_api_exception
+# TODO: SWIGGY
+from superset.utils.log import collect_request_payload
+from superset.views.utils import get_form_data
+#TODO: SWIGGY END
 
 logger = logging.getLogger(__name__)
 get_related_schema = {
@@ -111,6 +115,28 @@ def statsd_metrics(f: Callable[..., Any]) -> Callable[..., Any]:
         except Exception as ex:
             self.incr_stats("error", f.__name__)
             raise ex
+        # TODO: SWIGGY
+        payload = collect_request_payload()
+        dashboard_id = None
+        dashboard_id = payload.get("dashboard_id")
+        if not dashboard_id:
+            dashboard_id = payload.get("id_or_slug")
+
+        if "form_data" in payload:
+            form_data, _ = get_form_data()
+            payload["form_data"] = form_data
+            slice_id = form_data.get("slice_id")
+        else:
+            slice_id = payload.get("slice_id")
+
+        try:
+            slice_id = int(slice_id)  # type: ignore
+        except (TypeError, ValueError):
+            slice_id = 0
+
+        request_path = payload.get('path')
+        metric_name = f"method={f.__name__},dashboard={dashboard_id},path={request_path}"
+        # TODO: SWIGGY END
 
         self.send_stats_metrics(response, f.__name__, duration)
         return response
@@ -344,6 +370,7 @@ class BaseSupersetModelRestApi(ModelRestApi):
             extra_rows = db.session.query(datamodel.obj).filter(pk_col.in_(ids)).all()
             result += self._get_result_from_rows(datamodel, extra_rows, column_name)
 
+    # TODO: SWIGGY
     def incr_stats(self, action: str, func_name: str) -> None:
         """
         Proxy function for statsd.incr to impose a key structure for REST API's
@@ -351,7 +378,7 @@ class BaseSupersetModelRestApi(ModelRestApi):
         :param action: String with an action name eg: error, success
         :param func_name: The function name
         """
-        self.stats_logger.incr(f"{self.__class__.__name__}.{func_name}.{action}")
+        self.stats_logger.incr(f"{self.__class__.__name__},{func_name},status={action}")
 
     def timing_stats(self, action: str, func_name: str, value: float) -> None:
         """
@@ -362,7 +389,7 @@ class BaseSupersetModelRestApi(ModelRestApi):
         :param value: A float with the time it took for the endpoint to execute
         """
         self.stats_logger.timing(
-            f"{self.__class__.__name__}.{func_name}.{action}", value
+            f"{self.__class__.__name__}.{action},{func_name}", value
         )
 
     def send_stats_metrics(
@@ -375,12 +402,11 @@ class BaseSupersetModelRestApi(ModelRestApi):
         :param key: The function name
         :param time_delta: Optional time it took for the endpoint to execute
         """
-        if 200 <= response.status_code < 400:
-            self.incr_stats("success", key)
-        else:
-            self.incr_stats("error", key)
+        self.incr_stats(str(response.status_code), key)
+
         if time_delta:
             self.timing_stats("time", key, time_delta)
+    # TODO: SWIGGY END
 
     @event_logger.log_this_with_context(
         action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.info",

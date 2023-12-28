@@ -28,7 +28,7 @@ import backoff
 import humanize
 import pandas as pd
 import simplejson as json
-from flask import abort, flash, g, redirect, render_template, request, Response
+from flask import abort, flash, g, redirect, render_template, request, Response, make_response, jsonify, session # TODO: SWIGGY added extra imports
 from flask_appbuilder import expose
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import (
@@ -161,8 +161,15 @@ from superset.views.utils import (
     get_viz,
     is_owner,
     sanitize_datasource_data,
+    web_or_client_auth #TODO: Swiggy Added extra import
 )
 from superset.viz import BaseViz
+# TODO: Swiggy
+import hashlib
+import traceback
+import os
+#TODO: SWIGGY END
+
 
 config = app.config
 SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = config["SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT"]
@@ -600,6 +607,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
     )
     @expose("/explore_json/", methods=EXPLORE_JSON_METHODS)
     @etag_cache()
+    # TODO: Swiggy
+    @web_or_client_auth
     @check_resource_permissions(check_datasource_perms)
     def explore_json(
         self, datasource_type: Optional[str] = None, datasource_id: Optional[int] = None
@@ -2822,3 +2831,356 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                 "Failed to fetch schemas allowed for csv upload in this database! "
                 "Please contact your Superset Admin!"
             )
+
+
+    # TODO: SWIGGY
+    @expose('/render_filter_slices', methods=['POST'])
+    @web_or_client_auth
+    def render_filter_slices(self):
+        try:
+            print("printing username inside render_filter_slice", flush=True)
+            # print(g.user.username, flush=True)
+        except:
+            response = make_response(jsonify({'message': 'Access is Denied',
+                                              'severity': 'danger'}), 401)
+            response.headers['Content-Type'] = "application/json"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Origin"] = request.headers['Origin']
+            response.headers[
+                "Access-Control-Allow-Methods"] = "GET,HEAD,OPTIONS,POST,PUT"
+            response.headers[
+                "Access-Control-Allow-Headers"] = "X-TOKEN, Content-Type, cookie"
+            return response
+        json_data = request.get_json()
+        app.logger.info(f'Request from Anobis :- {json_data}')
+        key = hashlib.md5(json.dumps(json_data).encode('utf-8')).hexdigest() + 'anobis'
+        print("printing key inside render_filter_slice", flush=True)
+        print(key, flush=True)
+        app.logger.info(f"Cache Key :- {key}")
+        response_obj = None
+        # Commenting Cache Logic
+        # try:
+        #     response_obj = cache.get(key)
+        # except:
+        #     print("can't connect to cache")
+        #     pass
+        # if (response_obj):
+        #     return response_obj
+        session.permanent = True
+
+        request_json = request.get_json()
+        response_array = []
+        response_obj2 = {}
+        last_updated_time_stamps = []
+        cache_miss = []
+        for slice_detail in request_json:
+            response = {}
+            if (slice_detail['slice_id'] and slice_detail['filters']):
+                response['slice_id'] = slice_detail['slice_id']
+                filters = slice_detail['filters']
+                response['filters'] = filters
+                # response['filters'] = slice_detail['filters']
+                key = hashlib.md5(
+                    json.dumps(response).encode('utf-8')).hexdigest() + 'anobis'
+                print(key, flush=True)
+                print("printing key inside render_filter_slice", flush=True)
+                # try:
+                #     response_obj = cache.get(key)
+                #     if (response_obj is None):
+                #         cache_miss.append(response)
+                #     else:
+                #         response['data'] = response_obj['data']
+                #         response['lastUpdatedTimeStamp'] = int(
+                #             response_obj['lastUpdatedTimeStamp'])
+                #         last_updated_time_stamps.append(
+                #             int(response['lastUpdatedTimeStamp']))
+                #         response_array.append(response)
+                # except:
+                #     print("can't connect to cache")
+                #     cache_miss.append(response)
+                cache_miss.append(response)
+        session.permanent = True
+        app.logger.info("Step1")
+        # app.logger.info(f"Cache_Miss {cache_miss}")
+        for slice_detail in cache_miss:
+            cacheKey = {}
+            cacheKey['slice_id'] = slice_detail['slice_id']
+            cacheKey['filters'] = slice_detail['filters']
+            key = hashlib.md5(
+                json.dumps(cacheKey).encode('utf-8')).hexdigest() + 'anobis'
+            app.logger.info("printing key inside render_filter_slice in for loop")
+            app.logger.info(key)
+            # app.logger.info(f"Slice details {slice_detail}")
+            data = self.render_filter_slice1(slice_detail['slice_id'],
+                                             slice_detail['filters'])
+            # app.logger.info(f"Data ")
+            if (data == "No data found"):
+                continue
+            slice_detail['data'] = data
+
+            slice_detail['lastUpdatedTimeStamp'] = self.getLastUpdatedTimeStamp(
+                slice_detail['slice_id'])
+            try:
+                last_updated_time_stamps.append(
+                    int(float(slice_detail['lastUpdatedTimeStamp'])))
+            except:
+                print("lastUpdatedTime not valid")
+            app.logger.info(f"List last updated timestamp {last_updated_time_stamps}")
+            cacheResponse = {}
+            cacheResponse['data'] = slice_detail['data']
+            cacheResponse['lastUpdatedTimeStamp'] = slice_detail['lastUpdatedTimeStamp']
+            app.logger.info(
+                f"Last Updated Timestamp {cacheResponse['lastUpdatedTimeStamp']}")
+            response_array.append(slice_detail)
+            # app.logger.info(f"Cache Timeout :- {os.environ['REDIS_TIMEOUT']}")
+            # try:
+            #     cache.set(
+            #         key,
+            #         cacheResponse,
+            #         timeout=os.environ['REDIS_TIMEOUT'])
+            # except:
+            #     print("can't set the cache")
+        try:
+            response_obj2['data'] = response_array
+        except:
+            print("Error processing your request.")
+        response_obj2['lastUpdatedTimeStamp'] = int(max(last_updated_time_stamps))
+        a = make_response(json.dumps(response_obj2))
+        a.headers["Access-Control-Allow-Credentials"] = "true"
+        a.headers["Access-Control-Allow-Origin"] = request.headers['Origin']
+        a.headers["Content-Type"] = "application/json"
+        return a
+
+    def render_filter_slice1(self, slice_id, filters):
+        if (slice_id != ''):
+            form_data = {}
+            try:
+                form_data, slc = get_form_data(slice_id, use_slice_data=True)
+                # app.logger.info(f"SLC data in render_filter_slice1 :- {slc}")
+            except Exception as e:
+                return json_error_response(
+                    utils.error_msg_from_exception(e),
+                    stacktrace=traceback.format_exc())
+            # app.logger.info(f"form data in render_filter_slice1 :- {form_data}")
+            slice_data = self.custom_filter_slice(form_data, filters)
+            # app.logger.info(f"slice_data is {slice_data}")
+            response = self.filtered_explore1(form_data=slice_data)
+            form_data = response.get("form_data", None)
+            label = ""
+            if form_data is not None:
+                metric = form_data.get("metric", None)
+                metrics = form_data.get("metrics", None)
+                if metric is not None:
+                    if isinstance(metric, dict):
+                        label = metric.get("label", "")
+                    else:
+                        label = metric
+                elif metrics is not None:
+                    if isinstance(metrics, list):
+                        if isinstance(metrics[0], dict):
+                            label = metrics[0].get("label", "")
+                        else:
+                            label = metrics[0]
+
+            response.pop("form_data", "")
+            response.pop("applied_filters", "")
+            response.pop("rejected_filters", "")
+            response.pop("colnames", "")
+            response.pop("cache_key", "")
+            response.pop("query", "")
+            response.pop("cache_timeout", "")
+            response.pop("rowcount", "")
+
+            response['label'] = label
+            return json.dumps(
+                response,
+                default=utils.json_int_dttm_ser,
+                ignore_nan=True,
+                sort_keys=False,
+            )
+        return "No data found"
+
+    def getLastUpdatedTimeStamp(self, slice_id):
+        app.logger.info(f"Core.py getLastUpdatedTimeStamp")
+        datasource = self.getDataSource(slice_id)
+        app.logger.info(f"getting datasource ${datasource} info for slice: {slice_id}")
+        dat = {'granularity': '', 'viz_type': 'big_number_total',
+               "postAggregations": [], 'metric': 'max__time_stamp'}
+        # app.logger.info(f"Source:- {datasource}")
+        # app.logger.info(f"Type and ID'S {datasource.type} {datasource.id}")
+        viz_obj = get_viz(
+            datasource_type=datasource.type,
+            datasource_id=datasource.id,
+            form_data=dat,
+            force=False,
+        )
+        app.logger.info(f"my Viz_obj is {viz_obj}")
+        try:
+            payload = viz_obj.get_payload()
+            app.logger.info(f"line 623 core.py PAYLOAD is {payload}")
+            app.logger.info(
+                f"TimeSTamp is {str(payload['data'][0]['max__time_stamp'])}")
+            # return str(payload['data']['data'][0][0])
+            return str(payload['data'][0]['max__time_stamp'])  # For  testing
+        except Exception as e:
+            app.logger.exception(f"here is last updated timestamp exception {e}")
+            # print("Error from get_last_updated_time_stamp method : ", payload)
+            return "946684800000"  # 2000 1 january 00:00:00
+
+    def custom_filter_slice(self, form_data, request_data):
+        if (not ('adhoc_filters' in form_data) or form_data['adhoc_filters'] == None):
+            form_data['adhoc_filters'] = []
+
+        if ('adhoc_filters' in request_data):
+            for i in request_data['adhoc_filters']:
+                form_data['adhoc_filters'].append(
+                    self.get_in_op_template(i['field'], i['value'],
+                                            i['expression_type']))
+
+        if ('chronic_filters' in request_data):
+            chronic_filters = request_data['chronic_filters']
+
+            if ('from' in chronic_filters):
+                form_data['since'] = chronic_filters['from']
+            if ('to' in chronic_filters):
+                form_data['until'] = chronic_filters['to']
+            if ('time_grain_sqla' in chronic_filters):
+                form_data['time_grain_sqla'] = chronic_filters['time_grain_sqla']
+                app.logger.info(
+                    f"time_grain_sqla after :- {form_data['time_grain_sqla']}")
+            if ('group_by' in chronic_filters):
+                form_data['groupby'] = chronic_filters['group_by']
+            if ('time_compare' in chronic_filters):
+                form_data['time_compare'] = chronic_filters['time_compare']
+        return form_data
+
+    def filtered_explore1(self, datasource_type=None, datasource_id=None,
+                          form_data=None):
+        if form_data == None:
+            return "No data found"
+
+        if ('chronic_filters' in form_data):
+            if ('time_compare' in form_data['chronic_filters']):
+                form_data['time_compare'] = form_data['chronic_filters']['time_compare']
+
+        try:
+            datasource_id, datasource_type = get_datasource_info(
+                datasource_id, datasource_type, form_data
+            )
+        except SupersetException:
+            datasource_id = None
+            # fallback unkonw datasource to table type
+            datasource_type = SqlaTable.type
+
+        datasource: Optional[BaseDatasource] = None
+        if datasource_id is not None:
+            try:
+                datasource = ConnectorRegistry.get_datasource(
+                    cast(str, datasource_type), datasource_id, db.session
+                )
+            except DatasetNotFoundError:
+                pass
+        datasource_name = datasource.name if datasource else _("[Missing Dataset]")
+
+        if datasource:
+            if config["ENABLE_ACCESS_REQUEST"] and (
+                not security_manager.can_access_datasource(datasource)
+            ):
+                flash(
+                    __(security_manager.get_datasource_access_error_msg(datasource)),
+                    "danger",
+                )
+                return redirect(
+                    "superset/request_access/?"
+                    f"datasource_type={datasource_type}&"
+                    f"datasource_id={datasource_id}&"
+                )
+        viz_type = form_data.get('viz_type')
+        # app.logger.info(f"Viz type :- {viz_type} and default endpoint :- {datasource.default_endpoint}")
+        if not viz_type and datasource.default_endpoint:
+            return redirect(datasource.default_endpoint)
+
+        form_data['datasource'] = str(datasource_id) + '__' + datasource_type
+        # On explore, merge extra filters into the form data
+        utils.convert_legacy_filters_into_adhoc(form_data)
+        utils.merge_extra_filters(form_data)
+
+        return self.explore_json1(json.dumps(form_data), datasource_type, datasource_id)
+
+    def getDataSource(
+        self,
+        slice_id=None):
+        form_data, slc = get_form_data(slice_id)
+        datasource_type = slc.datasource.type
+        datasource_id = slc.datasource.id
+        datasource = ConnectorRegistry.get_datasource(
+            datasource_type, datasource_id, db.session)
+        return datasource
+
+    def get_in_op_template(self, field, req_arr, expression_type):
+        if expression_type == "SIMPLE":
+            sample_template = {
+                "comparator": req_arr,
+                "subject": field,
+                "expressionType": "SIMPLE",
+                "clause": "WHERE",
+                "fromFormData": True,
+                "sqlExpression": None,
+                "operator": "in",
+                "filterOptionName": "filter_juzaly9haa_83sxqjizd5h"}
+        else:
+            app.logger.info(f"Received Filter type SQL for Anobis :- {field}")
+            sample_template = {
+                "expressionType": "SQL",
+                "sqlExpression": field,
+                "clause": "WHERE",
+                "filterOptionName": "filter_juzaly9haa_83sxqjizd5h"}
+        return sample_template
+
+    def explore_json1(self, form_data, datasource_type, datasource_id):
+        try:
+            # app.logger.info(f"Explore_Json1 {form_data}")
+            form_data = json.loads(form_data)
+
+            # app.logger.info(f"datasources :- {datasource_id} and {datasource_type}")
+        except Exception as e:
+            logging.exception(e)
+            return json_error_response(
+                utils.error_msg_from_exception(e),
+                stacktrace=traceback.format_exc())
+        '''
+        We have overridden the time range as its not taking from since and until values
+        from the request body.This is just an hack.
+        '''
+        range = form_data.get("since") + " : " + form_data.get("until")
+        form_data["time_range"] = range
+        app.logger.info(f"Range :- {range}")
+        app.logger.info(f"Updated Form Data :- {form_data}")
+        viz_obj = get_viz(
+            datasource_type=datasource_type,
+            datasource_id=datasource_id,
+            form_data=form_data,
+            force=False,
+        )
+        # app.logger.info(f"PAYLOAD :- {viz_obj.get_payload()}")
+        # app.logger.info(f"Type of Payload {type(payload)}")
+        payload = viz_obj.get_payload()
+        data_dict = {}
+        if form_data.get("viz_type", "table") == "big_number_total":
+            data_list = payload.get("data")
+            data = []
+            # app.logger.info(f'len of data_list :- {len(data_list)}')
+            if len(data_list) > 0:
+                for key, value in data_list[0].items():
+                    data.append(value)
+            else:
+                data.append(0)
+            app.logger.info(f"Data is {data}")
+            list_data = []
+            list_data.append(data)
+            data_dict['data'] = list_data
+            # app.logger.info(f"Data_Dict {data_dict}")
+            # payload.setdefault("data", data_dict)
+            payload['data'] = data_dict
+        # app.logger.info(f"Modified Payload :- {payload}")
+        return payload

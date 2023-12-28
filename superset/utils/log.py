@@ -36,7 +36,7 @@ from typing import (
     Union,
 )
 
-from flask import current_app, g, request
+from flask import current_app, g, request, Response # TODO: SWIGGY added extra imports
 from flask_appbuilder.const import API_URI_RIS_KEY
 from sqlalchemy.exc import SQLAlchemyError
 from typing_extensions import Literal
@@ -61,6 +61,21 @@ def collect_request_payload() -> Dict[str, Any]:
     url_rule = str(request.url_rule)
     if url_rule != request.path:
         payload["url_rule"] = url_rule
+        # TODO: SWIGGY
+        #This part is added to retreive the dashboard_id or any other identifier which sometime is part of URL path
+        # E.g: URL Pattern -> /<id_or_slug>/datasets and URL_PATH = /5/datasets . Here 5 is dashboard_id
+        key_match = re.search(r"<(\w+)>", url_rule)
+        if key_match:
+            key = key_match.group(1)
+            url_rule_parts = re.split(r"/", url_rule)
+            path_parts = re.split(r"/", request.path)
+            for i, part in enumerate(url_rule_parts):
+                if "<" in part and ">" in part:
+                    if i < len(path_parts):
+                        value = path_parts[i]
+                        payload[key] = value
+                        break
+        # TODO: SWIGGY END
 
     # remove rison raw string (q=xxx in search params) in favor of
     # rison object (could come from `payload_override`)
@@ -172,6 +187,18 @@ class AbstractEventLogger(ABC):
             slice_id = int(slice_id)  # type: ignore
         except (TypeError, ValueError):
             slice_id = 0
+        # TODO: SWIGGY
+        request_path = payload.get('path')
+        status = payload_override.pop("status", None)
+
+        statsd_incr_metric_name = f"{action},dashboard={dashboard_id},path={request_path},status={status}"
+
+        if log_to_statsd:
+            self.stats_logger.incr(statsd_incr_metric_name)
+            if duration_ms:
+                statsd_timing_metric_name = f"{action}.time,dashboard={dashboard_id},path={request_path},status={status}"
+                self.stats_logger.timing(statsd_timing_metric_name, duration_ms)
+        # TODO: SWIGGY END
 
         if log_to_statsd:
             self.stats_logger.incr(action)
@@ -243,6 +270,10 @@ class AbstractEventLogger(ABC):
                     value = f(*args, add_extra_log_payload=log, **kwargs)
                 else:
                     value = f(*args, **kwargs)
+                # TODO: SWIGGY
+                if isinstance(value, Response):
+                    log(status=value.status_code)
+                # TODO: SWIGGY END
             return value
 
         return wrapper
@@ -353,3 +384,103 @@ class DBEventLogger(AbstractEventLogger):
         except SQLAlchemyError as ex:
             logging.error("DBEventLogger failed to log event(s)")
             logging.exception(ex)
+
+
+
+# TODO: SWIGGY
+import os
+def get_env_variable(var_name: str, default: Optional[str] = None) -> str:
+    """Get the environment variable or raise exception."""
+    try:
+        return os.environ[var_name]
+    except KeyError:
+        if default is not None:
+            return default
+        else:
+            error_msg = "The environment variable {} was missing, abort...".format(
+                var_name
+            )
+            raise EnvironmentError(error_msg)
+
+SERVICE = get_env_variable("SERVICE")
+DP_URL = get_env_variable("DP_URL")
+import itertools
+import re
+import calendar
+import uuid
+import requests
+import time
+
+class DpEventLogger(AbstractEventLogger):
+    # Disabling the DBEvent logger and writing audit logs to delta table
+    id_obj = itertools.count()
+    def __init__(self):
+        self.id = DpEventLogger.id_obj
+    def log(  # pylint: disable=too-many-arguments,too-many-locals
+        self,
+        user_id: Optional[int],
+        action: str,
+        dashboard_id: Optional[int],
+        duration_ms: Optional[int],
+        slice_id: Optional[int],
+        referrer: Optional[str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        # pylint: disable=import-outside-toplevel
+        from superset.models.core import Log
+
+        records = kwargs.get("records", [])
+        logs = []
+        for record in records:
+            json_string: Optional[str]
+            try:
+                json_string = json.dumps(record)
+            except Exception as e:  # pylint: disable=broad-except
+                json_string = None
+                logging.exception(e)
+            log = Log(
+                action=action,
+                json=json_string,
+                dashboard_id=dashboard_id,
+                slice_id=slice_id,
+                duration_ms=duration_ms,
+                referrer=referrer,
+                user_id=user_id,
+            )
+            try:
+                #incremental id for the event collector
+                self.id = next(DpEventLogger.id_obj)
+                event_ingestion_request_body = {
+                    "header": {
+                        "eventId": self.id,
+                        "uuid": str(uuid.uuid4()),
+                        "appName": "compass-web-service",
+                        "timestamp": calendar.timegm(time.gmtime())*1000,
+                        "schemaVersion": "1.0.4",
+                        "name": "compass_audit_logs"
+                    }
+                }
+                event_dict = log.__dict__
+                #_sa_instance_state is used by SQLAlchemhy internally but since we have disabled writing to logs table, this key is removed
+                key_to_remove = "_sa_instance_state"
+                event_dict.pop(key_to_remove, None)  # No `KeyError` here
+                #keep the data types consistent with that of the event schema
+                event_dict.update({"user_id": int(event_dict.get("user_id")) if event_dict.get("user_id") else None})
+                #remove fields that have NULL values otherwise the event goes to the validation failed table
+                event_dict = {k: v for k, v in event_dict.items() if v}
+                #add service name
+                event_dict.update({"service_name": SERVICE})
+                event_ingestion_request_body.update({"event": event_dict})
+                logs.append(event_ingestion_request_body)
+            except Exception as e:
+                logging.exception(f'Something went wrong in processing log {e}')
+        try:
+            logging.info(f'event passed = {logs}')
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(DP_URL,
+                                     data=json.dumps(logs),
+                                     headers=headers)
+            logging.info(f'Audit logs sent to event collector successfully {response.text}')
+        except Exception as e:
+            logging.exception(f'Failed to send audit logs to delta table {e}')

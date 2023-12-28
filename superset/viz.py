@@ -2157,10 +2157,12 @@ class FilterBoxViz(BaseViz):
             asc = flt.get("asc")
             if metric and asc is not None:
                 query_obj["orderby"] = [(metric, asc)]
-            self.get_query_context_factory().create(
-                datasource={"id": self.datasource.id, "type": self.datasource.type},
-                queries=[query_obj],
-            ).raise_for_access()
+            # TODO: SWIGGY commentted this out as temp fix for datasource access issue
+#             self.get_query_context_factory().create(
+#                 datasource={"id": self.datasource.id, "type": self.datasource.type},
+#                 queries=[query_obj],
+#             ).raise_for_access()
+            #TODO: SWIGGY END
             df = self.get_df_payload(query_obj=query_obj).get("df")
             self.dataframes[col] = df
 

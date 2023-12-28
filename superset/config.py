@@ -59,7 +59,7 @@ from superset.stats_logger import DummyStatsLogger
 from superset.superset_typing import CacheConfig
 from superset.utils.core import is_test, parse_boolean_string
 from superset.utils.encrypt import SQLAlchemyUtilsAdapter
-from superset.utils.log import DBEventLogger
+from superset.utils.log import DBEventLogger, DpEventLogger # TODO: SWIGGY added extra imports
 from superset.utils.logging_configurator import DefaultLoggingConfigurator
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,11 @@ if TYPE_CHECKING:
 
 # Realtime stats logger, a StatsD implementation exists
 STATS_LOGGER = DummyStatsLogger()
-EVENT_LOGGER = DBEventLogger()
+
+# TODO: SWIGGY event logger
+EVENT_LOGGER = DpEventLogger()
+# EVENT_LOGGER = DBEventLogger()
+#TODO: SWIGGY END
 
 SUPERSET_LOG_VIEW = True
 

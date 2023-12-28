@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable, Dict, Iterator, Optional, TYPE_CHECKING, Union
 
-from flask import current_app, Response
+from flask import current_app, Response, g, redirect # TODO: SWIGGY added extra imports
 
 from superset import is_feature_enabled
 from superset.dashboards.commands.exceptions import DashboardAccessDeniedError
@@ -120,6 +120,10 @@ def check_dashboard_access(
                 try:
                     current_app.appbuilder.sm.raise_for_dashboard_access(dashboard)
                 except DashboardAccessDeniedError as ex:
+                    # TODO: Swiggy - This is a hack to redirect to login page
+                    if not g.user or not g.user.is_authenticated:
+                        return redirect(appbuilder.get_url_for_login)
+                    # TODO: SWIGGY END
                     return on_error(self, ex)
                 except Exception as exception:
                     raise exception

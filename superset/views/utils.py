@@ -23,7 +23,7 @@ from urllib import parse
 import msgpack
 import pyarrow as pa
 import simplejson as json
-from flask import g, has_request_context, request
+from flask import g, has_request_context, request, jsonify, make_response #TODO: Swiggy added extra imports
 from flask_appbuilder.security.sqla import models as ab_models
 from flask_appbuilder.security.sqla.models import User
 from flask_babel import _
@@ -50,6 +50,9 @@ from superset.models.sql_lab import Query
 from superset.superset_typing import FormData
 from superset.utils.decorators import stats_timing
 from superset.viz import BaseViz
+# TODO: Swiggy
+import jwt
+
 
 logger = logging.getLogger(__name__)
 stats_logger = app.config["STATS_LOGGER"]
@@ -428,6 +431,28 @@ def is_owner(obj: Union[Dashboard, Slice, SqlaTable], user: User) -> bool:
     """Check if user is owner of the slice"""
     return obj and user in obj.owners
 
+
+# TODO: Swiggy
+def web_or_client_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if auth_header and 'Bearer ' in auth_header:
+            logger.info("Authenticating with Bearer Token")
+            token = auth_header.split()[1]
+            secret_key = app.config.get('SECRET_KEY')
+            try:
+                jwt.decode(token, secret_key, algorithms=['HS256'])
+            except Exception as ex:
+                logger.error("Invalid Token: " + str(ex))
+                response = make_response(jsonify({'message': 'Invalid token'}), 401)
+                return response
+            return f(*args, **kwargs)
+        return has_access_api(
+            check_resource_permissions(check_datasource_perms)(f))(*args, **kwargs)
+
+    return decorated_function
+# TODO: Swiggy END
 
 def check_resource_permissions(
     check_perms: Callable[..., Any],
