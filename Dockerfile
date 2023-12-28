@@ -19,7 +19,7 @@
 # PY stage that simply does a pip install on our requirements
 ######################################################################
 ARG PY_VER=3.8.12
-FROM python:${PY_VER} AS superset-py
+FROM 157529275398.dkr.ecr.ap-southeast-1.amazonaws.com/ci-libraries/docker/library/python:3.8.13 AS superset-py
 
 RUN mkdir /app \
         && apt-get update -y \
@@ -48,7 +48,7 @@ RUN cd /app \
 ######################################################################
 # Node stage to deal with static asset construction
 ######################################################################
-FROM node:16 AS superset-node
+FROM 157529275398.dkr.ecr.ap-southeast-1.amazonaws.com/ci-libraries/docker/library/node:16 AS superset-node
 
 ARG NPM_VER=7
 RUN npm install -g npm@${NPM_VER}
@@ -79,7 +79,7 @@ RUN cd /app/superset-frontend \
 # Final lean image...
 ######################################################################
 ARG PY_VER=3.8.12
-FROM python:${PY_VER} AS lean
+FROM 157529275398.dkr.ecr.ap-southeast-1.amazonaws.com/ci-libraries/docker/library/python:3.8.13 AS lean
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

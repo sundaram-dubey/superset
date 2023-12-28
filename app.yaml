@@ -1,0 +1,6 @@
+templateVersion: 2.0
+submodules:
+  - compass
+  - superset:[compass]
+  - superset-frontend:[compass]
+  - superset-websocket:[compass]

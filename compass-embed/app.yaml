@@ -1,0 +1,143 @@
+templateVersion: 2.0
+
+meta:
+  org: "dip"
+  pod: "sp"
+  name: "compass-embed"
+  tier: 2
+  version: "0.1"
+  frameworks:
+    - name: "python"
+      version: "3.8.12"
+  slackChannel: "anobis-sentry-alerts"
+
+sos:
+  type: "core_tech_capability"
+  name: "business_metric_reporting"
+
+infra:
+  compute: # This is for prod. For QA and dev,we'll manage.
+    type: "Container" # could be VM or Container
+    networkProxySideCar: false
+    sidecars:
+      - name: "statsd"
+        image: "157529275398.dkr.ecr.ap-southeast-1.amazonaws.com/cicd/dp-ie/statsd:v0.22.4-logs-1"
+        port: 9851
+        appPort: 9851
+        appProtocol: "tcp"
+        protocol: "http"
+        cpu: 0.5
+        healthCheck: true
+        healthProtocol: "http"
+        memory: "500Mi"
+        healthURL: "/health"
+        healthPort: 9102
+        metricURL: "/metrics"
+        metricPort: 9102
+    cpu: 1
+    memory: "3400Mi"
+    appPort: 8088
+    appProtocol: "http"
+    healthCheck: true
+    healthProtocol: "http"
+    healthPort: 9102
+    healthURL: "/health"
+    scaling:
+      min: 2
+      max: 10
+      metric:
+        type: "cpu"
+        target: 40
+    startupTime: 30s
+    gracePeriod: 60s
+    requestTimeout: 120s
+    alias: "compass-embed.swiggyops.de"
+    logging:
+      backend: "sumologic"# supports only sumologic and s3
+
+  storage:
+    - type: "redis"
+      name: "compassembedredis"
+      params:
+        clusterName: "compassembedredis"
+        memory: "5Gi"
+        throughput: "30000ops"
+        cluster: true
+        shards: 1
+        replicas: 1
+    - type: "mysql"
+      name: "compassembeddb"
+      params:
+        database: "compass_embed_prod"
+        schema: "deployment/mysql_dump/shuttle_cd/"
+        grant: "SELECT,INSERT,UPDATE,DELETE"
+        disk: "30Gi"
+        cpu: 4
+        memory: "16Gi"
+        rps: 1000
+        wps: 1000
+        slaves: # For all the slaves, grant would automatically be only SELECT
+        - name: "reader"
+          disk: "30Gi"
+          rps: 1000
+    - type: "ref"
+      name: "compasswebservices3"
+      params:
+        serviceName: "compass-web-service"
+        org: "dip"
+        pod: "sp"
+        storageType: "S3"
+        storageName: "compasswebservices3"
+        versioning: false
+        objectLock: false
+
+pipeline:
+  stages:
+    - name: "CI Test and Build"
+      env: "ci"
+      actions:
+        - type: "build"
+          name: "Build"
+          params:
+            command: "echo 'building'"
+            
+    - name: "u4-deploy"
+      env: "u4"
+      actions:
+        - type: "deploy"
+          name: "deploy"
+          params:
+            strategy: "rolling"
+            approver: "dev"
+    - name: "prod-deploy"
+      env: "production"
+      actions:
+        - type: "deploy"
+          name: "deploy"
+          params:
+            strategy: "canary"
+            canaryStages:
+              - share: 0
+                approver: "dev"
+              - share: 1
+                approver: "dev"
+              - share: 10
+                approver: "dev"
+
+ciSetup:
+  baseContainer:
+    name: "ubuntu18"
+    resources:
+      cpu: "4"
+      memory: "8Gi"
+
+envVar:
+  #   Absence of any of the secrets fails the deploy action
+  secret: # This section contains only the references of mandatory secrets for validation purposes.
+    - AZURE_APPLICATION_ID
+    - AZURE_SECRET
+  config: # Overrides only
+    ref: "deployment/compass-embed-conf/" # Folder path to conf from the root
+    sidecars:
+      - name: "statsd"
+        ref: "deployment/statsd-conf/"

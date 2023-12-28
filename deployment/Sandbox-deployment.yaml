@@ -1,0 +1,32 @@
+#TODO: fetch env file from s3 and inject secrets.
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: A template for deploying compass on Sandbox. Key pair and VPC need to be created as a prerquisite.
+Resources:
+  CeleryWorkerEC2:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    Properties:
+      ImageId: ami-0eb25f2708a457e0e
+  SupersetEC2:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    Properties:
+      ImageId: ami-0eb25f2708a457e0e
+  WindowsUserEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-05c69a3ca73316eec
+    DeletionPolicy: Retain
+  CeleryBeatECR:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+  CeleryWorkerECR:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+  SupersetECR:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+  CompassRDS:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
