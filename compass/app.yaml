@@ -95,7 +95,7 @@ pipeline:
             uploadPackage:
               - pkg: "docker"
                 clusterName: "compass-web-service"
-                file: "../Dockerfile"
+                file: "Dockerfile"
                 multiClusterNames: "one-compass-service,compass-embed"
     - name: "u4-deploy"
       env: "u4"
