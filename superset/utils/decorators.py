@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, Iterator, Optional, TYPE_CHECKING, Union
 
 from flask import current_app, Response, g, redirect # TODO: SWIGGY added extra imports
 
-from superset import is_feature_enabled
+from superset import is_feature_enabled, appbuilder # TODO: SWIGGY added extra imports
 from superset.dashboards.commands.exceptions import DashboardAccessDeniedError
 from superset.utils import core as utils
 from superset.utils.dates import now_as_float
