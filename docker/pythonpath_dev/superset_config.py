@@ -28,7 +28,7 @@ from typing import Optional, Any, Callable, Dict, List, Optional, Type, TYPE_CHE
 # from cachelib.file import FileSystemCache
 from celery.schedules import crontab
 # TODO: SWIGGY
-# from superset import app
+from superset import app
 from boto3 import client
 from botocore.exceptions import ClientError
 from flask_appbuilder.security.manager import AUTH_OAUTH,AUTH_DB
@@ -67,8 +67,6 @@ SQLALCHEMY_DATABASE_URI = "%s://%s:%s@%s:%s/%s" % (
     DATABASE_PORT,
     DATABASE_DB,
 )
-
-print("getting sql alchemy engine in superset config", SQLALCHEMY_DATABASE_URI)
 
 REDIS_HOST = get_env_variable("REDIS_HOST")
 REDIS_PORT = get_env_variable("REDIS_PORT")
@@ -217,3 +215,61 @@ SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = None
 GUEST_TOKEN_JWT_EXP_SECONDS = 3600 # 1 hour
 
+from superset.constants import CHANGE_ME_SECRET_KEY
+SECRET_KEY = get_env_variable("AUTH_SECRET_KEY", CHANGE_ME_SECRET_KEY)
+# PREVIOUS_SECRET_KEY = CHANGE_ME_SECRET_KEY
+
+SERVICE = get_env_variable("SERVICE")
+DATABASE_USER = get_env_variable(SERVICE+"DB_USER", get_env_variable("DATABASE_USER", "root"))
+DATABASE_PASSWORD = get_env_variable(SERVICE+"DB_PASSWORD", get_env_variable("DATABASE_PASSWORD", "root"))
+DATABASE_HOST = get_env_variable(SERVICE+"DB_URL", get_env_variable("DATABASE_HOST", "localhost"))
+DATABASE_PORT = get_env_variable(SERVICE+"DB_PORT", "3306")
+
+SHUTTLE_ENV = get_env_variable("SHUTTLE_ENV")
+REDIS_PORT = get_env_variable("REDIS_PORT") if SHUTTLE_ENV == "production" else get_env_variable(SERVICE+"REDIS_PORT", "6379")
+REDIS_HOST = get_env_variable(SERVICE+"REDIS_URL", "compass")
+REDIS_PASSWORD = get_env_variable(SERVICE+"REDIS_PASSWORD", "root")
+REDIS_CELERY_DB = get_env_variable("REDIS_CELERY_DB", default="0")
+REDIS_TIMEOUT= get_env_variable("REDIS_TIMEOUT", default=600)
+
+from cachelib.redis import RedisCache
+RESULTS_BACKEND = RedisCache(
+    host=REDIS_HOST, port=REDIS_PORT, db=0, key_prefix='')
+CACHE_TYPE = get_env_variable("CACHE_TYPE")
+
+CACHE_CONFIG = {
+    'CACHE_TYPE': CACHE_TYPE,
+    'CACHE_DEFAULT_TIMEOUT': REDIS_TIMEOUT, # 1 day default (in secs)
+    'CACHE_KEY_PREFIX': 'superset_results',
+    'CACHE_REDIS_HOST': REDIS_HOST,
+    'CACHE_REDIS_PORT': REDIS_PORT,
+    'CACHE_REDIS_PASSWORD': REDIS_PASSWORD,
+    'CACHE_REDIS_CLUSTER' if SHUTTLE_ENV == "production" else None : REDIS_HOST+":"+REDIS_PORT
+}
+DATA_CACHE_CONFIG = {
+    'CACHE_TYPE': CACHE_TYPE,
+    'CACHE_DEFAULT_TIMEOUT': REDIS_TIMEOUT, # 1 day default (in secs)
+    'CACHE_REDIS_HOST':REDIS_HOST,
+    'CACHE_REDIS_PORT':REDIS_PORT,
+    'CACHE_REDIS_PASSWORD':REDIS_PASSWORD,
+    'CACHE_REDIS_CLUSTER' if SHUTTLE_ENV == "production" else None : REDIS_HOST+":"+REDIS_PORT
+}
+
+CACHE_DEFAULT_TIMEOUT = int(REDIS_TIMEOUT)
+
+class ReverseProxied(object):
+
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+
+        environ['wsgi.url_scheme'] = 'https'
+        return self.app(environ, start_response)
+# ADDITIONAL_MIDDLEWARE = [ReverseProxied, ]
+
+
+WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASEURL", "http://superset:8088/")
+SQLALCHEMY_POOL_SIZE = int(get_env_variable("SQLALCHEMY_POOL_SIZE"))
+
+# TODO: SWIGGY END
