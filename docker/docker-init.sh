@@ -47,7 +47,7 @@ if [ "$CYPRESS_CONFIG" == "true" ]; then
 fi
 # Initialize the database
 echo_step "1" "Starting" "Applying DB migrations"
-superset db upgrade
+#superset db upgrade # TODO: SWIGGY - This is failing on prod as we don't have DDL access to the DB
 echo_step "1" "Complete" "Applying DB migrations"
 
 # Create an admin user
