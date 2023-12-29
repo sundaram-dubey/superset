@@ -23,10 +23,16 @@
 import logging
 import os
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Any, Callable, Dict, List, Optional, Type, TYPE_CHECKING, Union, Literal # TODO: SWIGGY added extra imports
 
-from cachelib.file import FileSystemCache
+# from cachelib.file import FileSystemCache
 from celery.schedules import crontab
+# TODO: SWIGGY
+# from superset import app
+from boto3 import client
+from botocore.exceptions import ClientError
+from flask_appbuilder.security.manager import AUTH_OAUTH,AUTH_DB
+# TODO: SWIGGY END
 
 logger = logging.getLogger()
 
@@ -69,7 +75,9 @@ REDIS_PORT = get_env_variable("REDIS_PORT")
 REDIS_CELERY_DB = get_env_variable("REDIS_CELERY_DB", "0")
 REDIS_RESULTS_DB = get_env_variable("REDIS_RESULTS_DB", "1")
 
-RESULTS_BACKEND = FileSystemCache("/app/superset_home/sqllab")
+# TODO: SWIGGY
+# RESULTS_BACKEND = FileSystemCache("/app/superset_home/sqllab")
+# TODO: SWIGGY END
 
 
 class CeleryConfig(object):
@@ -97,7 +105,9 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True}
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = True
 WEBDRIVER_BASEURL = "http://superset:8088/"
 # The base URL for the email report hyperlinks.
-WEBDRIVER_BASEURL_USER_FRIENDLY = WEBDRIVER_BASEURL
+# TODO: SWIGGY
+WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY", "http://superset:8088/")
+#TODO: SWIGGY END
 
 SQLLAB_CTAS_NO_LIMIT = True
 
@@ -114,3 +124,96 @@ try:
     )
 except ImportError:
     logger.info("Using default Docker config...")
+
+# TODO: SWIGGY override configs here
+ENABLE_PROXY_FIX = True
+PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 2, "x_host": 1, "x_port": 0, "x_prefix": 1}
+SUPERSET_WEBSERVER_ADDRESS = get_env_variable("SUPERSET_WEBSERVER_ADDRESS", "0.0.0.0")
+SUPERSET_WEBSERVER_TIMEOUT = 30
+WTF_CSRF_ENABLED = False
+APP_NAME = "Swiggy-Compass"
+APP_ICON_WIDTH = 126
+
+auth_types = {
+    'AUTH_OID': 0,
+    'AUTH_DB': 1,
+    'AUTH_LDAP': 2,
+    'AUTH_REMOTE_USER': 3,
+    'AUTH_OAUTH': 4
+}
+AUTH_TYPE = auth_types.get(get_env_variable("AUTH_TYPE", AUTH_OAUTH))
+
+AUTH_USER_REGISTRATION = True
+
+def read_auth_roles_locally() -> Dict:
+    json_data = {}
+    print("In read_auth_roles_locally method")
+    try:
+        with open('superset/auth_roles_mapping.json') as f:
+            data = f.read()
+        json_data = json.loads(data)
+        print(json_data)
+
+    except EnvironmentError as e:
+        print('Error in reading auth_roles_mapping local file: ', e)
+    return json_data
+
+def auth_roles_mapping() -> Dict:
+    json_data = {}
+    BUCKET = 'swiggy-smart-products-prod'
+    FILE_TO_READ = 'compass/auth_roles_mapping.json'
+    try:
+        print("In Auth_Roles_Mapping method")
+        print("bucket_name: %s", get_env_variable('COMPASSWEBSERVICES3_BUCKETNAME', BUCKET))
+
+        config = Config(
+            retries={
+                'max_attempts': 5,
+                'mode': 'standard'
+            }
+        )
+        s3_client = client('s3', config=config)
+        file_content = s3_client.get_object(Bucket=get_env_variable(
+            'COMPASSWEBSERVICES3_BUCKETNAME', BUCKET), Key=FILE_TO_READ)[
+            "Body"].read().decode('utf-8')
+        json_data = json.loads(file_content)
+        print(json_data)
+
+    except (Exception) as e:
+        print('Error in reading auth_roles_mapping file: ', e)
+        return read_auth_roles_locally()
+    return json_data
+
+# AUTH_ROLES_MAPPING = auth_roles_mapping()
+
+
+# The default user self registration role
+AUTH_USER_REGISTRATION_ROLE = "Gamma_Swiggy"
+
+OAUTH_PROVIDERS = [
+    {
+        "name": "azure",
+        "icon": "fa-windows",
+        "token_key": "access_token",
+        "remote_app": {
+            "client_id": os.environ.get("AZURE_APPLICATION_ID"),
+            "client_secret": os.environ.get("AZURE_SECRET"),
+            "api_base_url": "https://login.microsoftonline.com/{AZURE_TENANT_ID}/oauth2",
+            "client_kwargs": {
+                "scope": "User.read name preferred_username email profile upon",
+                "resource": os.environ.get("AZURE_APPLICATION_ID"),
+            },
+            "request_token_url": None,
+            "access_token_url": "https://login.microsoftonline.com/830534c3-5672-4618-bd49-82e8af727e64/oauth2/token",
+            "authorize_url": "https://login.microsoftonline.com/830534c3-5672-4618-bd49-82e8af727e64/oauth2/authorize",
+        },
+    }
+]
+
+AUTH_STRICT_RESPONSE_CODES = True # copying directly from old config
+PUBLIC_ROLE_LIKE: Optional[str] = "Gamma"
+DASHBOARD_AUTO_REFRESH_MODE: Literal["fetch", "force"] = "fetch"
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = None
+GUEST_TOKEN_JWT_EXP_SECONDS = 3600 # 1 hour
+

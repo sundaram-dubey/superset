@@ -558,7 +558,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
     @event_logger.log_this
     @api
-    @has_access_api
+#     @has_access_api
     @handle_api_exception
     @permission_name("explore_json")
     @expose("/explore_json/data/<cache_key>", methods=["GET"])
@@ -598,7 +598,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         EXPLORE_JSON_METHODS.append("GET")
 
     @api
-    @has_access_api
+#     @has_access_api TODO: SWIGGY commented this out
     @handle_api_exception
     @event_logger.log_this
     @expose(
@@ -609,6 +609,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
     @etag_cache()
     # TODO: Swiggy
     @web_or_client_auth
+    # TODO: Swiggy END
     @check_resource_permissions(check_datasource_perms)
     def explore_json(
         self, datasource_type: Optional[str] = None, datasource_id: Optional[int] = None
@@ -3184,3 +3185,129 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             payload['data'] = data_dict
         # app.logger.info(f"Modified Payload :- {payload}")
         return payload
+
+    @api
+    @event_logger.log_this
+    @expose("/add_roles", methods=["POST"])
+    def add_roles(self):
+        body = request.get_json(force=True)
+        roles_list = body['roles']
+        try:
+            if type(roles_list) == list:
+                for role in roles_list:
+                    if security_manager.find_role(role) is None:
+                        app.logger.info(f'{role} Role is getting created')
+                        security_manager.add_role(role)
+            else:
+                app.logger.info('Request body format is not an List')
+                return jsonify({"message": f"Error occurred while creating roles"})
+        except Exception:
+            return jsonify({"message": f"Error occurred while creating roles"})
+
+        return jsonify({"message": f"Above roles are successfully created"})
+
+    """
+    This method is used to add an email role when a user tries to login in an application.
+    It will create role only if the role with the email name is not present.
+    """
+
+    @appbuilder.sm.oauth_user_info_getter
+    def get_oauth_user_info(self, provider, response=None):
+        user_info = security_manager.get_oauth_user_info(provider, response)
+        app.logger.info(f"User_Info :- {user_info}")
+        email = user_info['email']
+        '''
+        This code will retrieve the roles from Azure and will append those roles
+        if the user doesn't have that role
+        '''
+        if email is not None:
+            user = security_manager.find_user(email=email)
+            if user is not None:
+                user_azure_roles = security_manager._oauth_calculate_user_roles(
+                    user_info)
+                app.logger.info(
+                    f"Azure roles: {user_azure_roles}, Existing compass roles: {user.roles}")
+                user.roles = list(set().union(user_azure_roles, user.roles))
+                security_manager.update_user(user)
+                app.logger.info(
+                    f"Successfully updated roles for {email} with roles {user.roles}")
+        return user_info
+
+    """
+    Assigning an role to the users
+    """
+
+    @expose("/assign_roles", methods=["POST"])
+    def assign_roles(self):
+        response = {}
+        role_name = request.args.get("role")
+        if role_name == "Admin":
+            response = make_response(
+                jsonify({"message": "You cannot assign an Admin role"}),
+                401)
+            return response
+
+        role = security_manager.find_role(role_name)
+        if role is None:
+            response = make_response(
+                jsonify({"message": "Requested role is not present"}), 403)
+            return response
+
+        body = request.get_json(force=True)
+        users_email_list = body['emails']
+        for emails in users_email_list:
+            user = security_manager.find_user(email=emails)
+            if user is None:
+                app.logger.info(emails)
+                continue
+            roles = user.roles
+            if role in roles:
+                # app.logger.info("Role already existed for the user")
+                continue
+            roles.append(role)
+            user.roles = roles
+            security_manager.update_user(user)
+        return jsonify(
+            {"message": f"{role_name} role is successfully assigned to the users"})
+
+    """
+    Deleting the role from the users
+    """
+
+    @expose("/delete_user_roles", methods=["DELETE"])
+    def delete_user_roles(self):
+        role_name = request.args.get("role")
+        response = {}
+        if role_name == "Admin":
+            response = make_response(jsonify({"message": "You can delete an Admin "
+                                                         "role from users"}), 403)
+            return response
+
+        app.logger.info("Role is not admin role")
+        role = security_manager.find_role(role_name)
+        if role is None:
+            response = make_response(jsonify({"message": "Requested role is "
+                                                         "not present"}), 403)
+            return response
+        body = request.get_json(force=True)
+        users_email_list = body['emails']
+        for emails in users_email_list:
+            user = security_manager.find_user(email=emails)
+            if user is None:
+                app.logger.info(emails)
+                continue
+            roles = user.roles
+            if role in roles:
+                roles.remove(role)
+                user.roles = roles
+                security_manager.update_user(user)
+            else:
+                response = make_response(
+                    jsonify({"message": f"{role_name} is not assigned to the user"}),
+                    403)
+                return response
+
+        app.logger.info("Role deletion is successful")
+        return jsonify(
+            {"message": f"{role_name} role is successfully deleted from the users"})
+# TODO: SWIGGY END

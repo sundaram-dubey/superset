@@ -378,7 +378,7 @@ DEFAULT_FEATURE_FLAGS: Dict[str, bool] = {
     # this enables programmers to customize certain charts (like the
     # geospatial ones) by inputing javascript in controls. This exposes
     # an XSS security vulnerability
-    "ENABLE_JAVASCRIPT_CONTROLS": False,
+    "ENABLE_JAVASCRIPT_CONTROLS": True, # TODO: SWIGGY added this
     "KV_STORE": False,
     # When this feature is enabled, nested types in Presto will be
     # expanded into extra columns and/or arrays. This is experimental,
@@ -386,7 +386,7 @@ DEFAULT_FEATURE_FLAGS: Dict[str, bool] = {
     "PRESTO_EXPAND_DATA": False,
     # Exposes API endpoint to compute thumbnails
     "THUMBNAILS": False,
-    "DASHBOARD_CACHE": False,
+    "DASHBOARD_CACHE": True, # TODO: SWIGGY added this
     "REMOVE_SLICE_LEVEL_LABEL_COLORS": False,
     "SHARE_QUERIES_VIA_KV_STORE": False,
     "TAGGING_SYSTEM": False,
@@ -397,16 +397,16 @@ DEFAULT_FEATURE_FLAGS: Dict[str, bool] = {
     # When True, this escapes HTML (rather than rendering it) in Markdown components
     "ESCAPE_MARKDOWN_HTML": False,
     "DASHBOARD_NATIVE_FILTERS": True,
-    "DASHBOARD_CROSS_FILTERS": False,
+    "DASHBOARD_CROSS_FILTERS": True, # TODO: SWIGGY added this
     # Feature is under active development and breaking changes are expected
-    "DASHBOARD_NATIVE_FILTERS_SET": False,
-    "DASHBOARD_FILTERS_EXPERIMENTAL": False,
+    "DASHBOARD_NATIVE_FILTERS_SET": True, # TODO: SWIGGY added this
+    "DASHBOARD_FILTERS_EXPERIMENTAL": True, #TODO: SWIGGY added this
     "GLOBAL_ASYNC_QUERIES": False,
     "VERSIONED_EXPORT": True,
-    "EMBEDDED_SUPERSET": False,
+    "EMBEDDED_SUPERSET": True, # TODO: SWIGGY added this
     # Enables Alerts and reports new implementation
     "ALERT_REPORTS": False,
-    "DASHBOARD_RBAC": False,
+    "DASHBOARD_RBAC": True, # TODO: SWIGGY added this
     "ENABLE_EXPLORE_DRAG_AND_DROP": True,
     "ENABLE_FILTER_BOX_MIGRATION": False,
     "ENABLE_ADVANCED_DATA_TYPES": False,
@@ -428,7 +428,7 @@ DEFAULT_FEATURE_FLAGS: Dict[str, bool] = {
     "ALLOW_FULL_CSV_EXPORT": False,
     "UX_BETA": False,
     "GENERIC_CHART_AXES": False,
-    "ALLOW_ADHOC_SUBQUERY": False,
+    "ALLOW_ADHOC_SUBQUERY": True, # TODO: SWIGGY added this
     "USE_ANALAGOUS_COLORS": True,
     # Apply RLS rules to SQL Lab queries. This requires parsing and manipulating the
     # query, and might break queries and/or allow users to bypass RLS. Use with care!
@@ -605,9 +605,10 @@ EXPLORE_FORM_DATA_CACHE_CONFIG: CacheConfig = {
 # store cache keys by datasource UID (via CacheKey) for custom processing/invalidation
 STORE_CACHE_KEYS_IN_METADATA_DB = False
 
-# CORS Options
-ENABLE_CORS = False
-CORS_OPTIONS: Dict[Any, Any] = {}
+# CORS Options - # TODO: SWIGGY updated this
+ENABLE_CORS = True
+CORS_OPTIONS: Dict[Any, Any] = { 'supports_credentials': True, 'allow_headers': ['*'], 'resources':['*'], 'origins': ['*'], }
+# TODO: SWIGGY END
 
 # Chrome allows up to 6 open connections per domain at a time. When there are more
 # than 6 slices in dashboard, a lot of time fetch requests are queued up and wait for
