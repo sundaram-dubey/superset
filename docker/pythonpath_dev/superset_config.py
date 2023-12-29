@@ -182,7 +182,7 @@ def auth_roles_mapping() -> Dict:
         return read_auth_roles_locally()
     return json_data
 
-# AUTH_ROLES_MAPPING = auth_roles_mapping()
+AUTH_ROLES_MAPPING = auth_roles_mapping()
 
 
 # The default user self registration role
@@ -215,18 +215,21 @@ SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = None
 GUEST_TOKEN_JWT_EXP_SECONDS = 3600 # 1 hour
 
-from superset.constants import CHANGE_ME_SECRET_KEY
-SECRET_KEY = get_env_variable("AUTH_SECRET_KEY", CHANGE_ME_SECRET_KEY)
+# from superset.constants import CHANGE_ME_SECRET_KEY
+# SECRET_KEY = get_env_variable("AUTH_SECRET_KEY", "this_is_my_secret")
 # PREVIOUS_SECRET_KEY = CHANGE_ME_SECRET_KEY
 
-SERVICE = get_env_variable("SERVICE")
+SECRET_KEY = get_env_variable("AUTH_SECRET_KEY", "\2\1thisismyscretkey\1\2\\e\\y\\y\\h")
+PREVIOUS_SECRET_KEY = "\2\1thisismyscretkey\1\2\\e\\y\\y\\h"
+
+SERVICE = get_env_variable("SERVICE", "local")
 DATABASE_USER = get_env_variable(SERVICE+"DB_USER", get_env_variable("DATABASE_USER", "root"))
 DATABASE_PASSWORD = get_env_variable(SERVICE+"DB_PASSWORD", get_env_variable("DATABASE_PASSWORD", "root"))
 DATABASE_HOST = get_env_variable(SERVICE+"DB_URL", get_env_variable("DATABASE_HOST", "localhost"))
 DATABASE_PORT = get_env_variable(SERVICE+"DB_PORT", "3306")
 
 SHUTTLE_ENV = get_env_variable("SHUTTLE_ENV")
-REDIS_PORT = get_env_variable("REDIS_PORT") if SHUTTLE_ENV == "production" else get_env_variable(SERVICE+"REDIS_PORT", "6379")
+# REDIS_PORT = get_env_variable("REDIS_PORT") if SHUTTLE_ENV == "production" else get_env_variable(SERVICE+"REDIS_PORT", "6379")
 REDIS_HOST = get_env_variable(SERVICE+"REDIS_URL", "compass")
 REDIS_PASSWORD = get_env_variable(SERVICE+"REDIS_PASSWORD", "root")
 REDIS_CELERY_DB = get_env_variable("REDIS_CELERY_DB", default="0")
@@ -266,7 +269,7 @@ class ReverseProxied(object):
 
         environ['wsgi.url_scheme'] = 'https'
         return self.app(environ, start_response)
-# ADDITIONAL_MIDDLEWARE = [ReverseProxied, ]
+ADDITIONAL_MIDDLEWARE = [ReverseProxied, ]
 
 
 WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASEURL", "http://superset:8088/")
