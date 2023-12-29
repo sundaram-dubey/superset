@@ -17,6 +17,7 @@ asttokens==2.0.5
 backcall==0.2.0
     # via ipython
 authlib==0.15.5 # TODO: SWIGGY
+gevent==21.8.0 # TODO: SWIGGY
 boto3==1.18.19
     # via tabulator
 botocore==1.21.19
